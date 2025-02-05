@@ -1,0 +1,4 @@
+(sym_lib_table
+  (lib (name Telemetry-rescue)(type Legacy)(uri ${KIPRJMOD}/Telemetry-rescue.lib)(options "")(descr ""))
+  (lib (name 112J-TDAR-R01)(type Legacy)(uri ${KIPRJMOD}/Libraries/SD_Card/112J-TDAR-R01.lib)(options "")(descr ""))
+)
