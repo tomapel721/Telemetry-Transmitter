@@ -1,0 +1,5 @@
+(fp_lib_table
+  (lib (name OSCSC320X250X100N)(type Legacy)(uri C:/Users/Tomek/Desktop/OSCSC320X250X100N.mod)(options "")(descr ""))
+  (lib (name LFSPXO018044Reel)(type Legacy)(uri C:/Users/Tomek/Desktop/LFSPXO018044Reel/KiCad/LFSPXO018044Reel.mod)(options "")(descr ""))
+  (lib (name 112J-TDAR-R01)(type Legacy)(uri ${KIPRJMOD}/Libraries/SD_Card/112J-TDAR-R01.mod)(options "")(descr ""))
+)
