@@ -29,7 +29,6 @@
 #include "ff.h"
 #include "stdint.h"
 
-
 /* Exported types ------------------------------------------------------------*/
 
 /**
@@ -67,7 +66,7 @@ typedef struct
 uint8_t FATFS_LinkDriver(const Diskio_drvTypeDef *drv, char *path);
 uint8_t FATFS_UnLinkDriver(char *path);
 uint8_t FATFS_LinkDriverEx(const Diskio_drvTypeDef *drv, char *path, BYTE lun);
-uint8_t FATFS_UnLinkDriverEx(char *path, BYTE lun);
+uint8_t FATFS_UnLinkDriverEx(char *path);
 uint8_t FATFS_GetAttachedDriversNbr(void);
 
 #ifdef __cplusplus

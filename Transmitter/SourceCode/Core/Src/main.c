@@ -38,12 +38,13 @@
 /* USER CODE BEGIN Includes */
 
 #include "stdio.h"
-#include "nRF24/nRF24.h"
-#include "nrF24/nRF24_Defs.h"
-#include "Bufor/Frame.h"
 #include "fatfs_sd.h"
+#include "string.h"
 #include <stdbool.h>
-
+#include <NRF24/nRF24.h>
+#include <NRF24/nRF24_Defs.h>
+#include <Buffer/frame.h>
+#include <SD/SD_helpers.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -53,10 +54,13 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define MESSAGE_BUFF_LEN 32 // 32 payload + \0
 #define CAN_DATA_LENGTH 8
-#define CAN_STD_ID_BITS 8
-#define ASCII_ZERO_SIGN_CODE 48
+#define FILENAME_BUFFER_LENGTH 35
+#define SD_CARD_MOUNT_IMMEDIATELY 1
+#define TIME_SECONDS_IN_HOUR 3600
+#define TIME_MINUTES_IN_HOUR 60
+#define TIME_MILISECONDS_IN_SECOND 1000000
+#define SECOND_MILLENIUM 2000
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -68,175 +72,45 @@
 
 /* USER CODE BEGIN PV */
 
-uint8_t message[MESSAGE_BUFF_LEN];
-uint8_t messageLength;
-
-/* zmienne i funkcje do obsłgui karty SD */
-FATFS fs;
-FIL fil;
-FRESULT fresult;
-char filename[35];
-UINT bw;
-uint8_t counterSD; // licznik kiedy otworzyć/zamknąć plik - w domyśle co 10 ramek.
-
-/* Zwraca wielkość bufora na kartę SD, potrzebny do pisania na karcie */
-int bufsize(char* buf)
-{
-	int i = 0;
-	while( *buf++ != '\0') i++;
-	return i;
-}
-
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-
+static void readDataToBuffer(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-static void MX_NVIC_Init(void);
 
-/* Deklaracja zmiennych do CAN */
-CAN_RxHeaderTypeDef rxHeader;
-uint8_t rxData[8];
+/* SD Card-related variables */
+FATFS fs = {0};
+FIL fil = {0};
+FRESULT fresult = {0};
+char filename[FILENAME_BUFFER_LENGTH] = {0};
+UINT bw = 0;
+uint8_t counterSD = 0;
 
+/* CAN-related variables */
+CAN_RxHeaderTypeDef rxHeader = {0};
+uint8_t rxData[CAN_DATA_LENGTH] = {0};
 
-/* Deklaracja zmiennych do timestampów */
-RTC_TimeTypeDef currentTime;
-RTC_DateTypeDef currentDate;
+/* CAN buffer */
+Frame bufferingFrame = {0};
+
+/* RTC-related variables */
+RTC_TimeTypeDef currentTime = {0};
+RTC_DateTypeDef currentDate = {0};
 uint32_t miliseconds = 0;
 uint32_t seconds = 0;
 
-/* Deklaracja bufora dla CAN */
-Frame bufferingFrame;
+/* IRQ-related variables */
 bool interruptFlag = false;
 
+/* Radio module-related variables */
+const uint8_t* rxAddress = (uint8_t*)"Nad";
+const uint8_t* txAddress = (uint8_t*)"Odb";
 
- /* Funkcja czytająca potrzebne dane, pakująca do bufora i kartę SD */
- void readDataToBuffer(void)
- {
-
-	  	HAL_RTC_GetTime(&hrtc, &currentTime, RTC_FORMAT_BIN);
-	  	HAL_RTC_GetDate(&hrtc, &currentDate, RTC_FORMAT_BIN);
-	  	bufferingFrame.year = currentDate.Year;
-	  	bufferingFrame.month = currentDate.Month;
-	  	bufferingFrame.day = currentDate.Date;
-	  	bufferingFrame.hours = currentTime.Hours;
-	  	bufferingFrame.minutes = currentTime.Minutes;
-	  	bufferingFrame.seconds = currentTime.Seconds;
-	  	miliseconds = ((currentTime.SecondFraction - currentTime.SubSeconds)/((float)currentTime.SecondFraction+1) * 1000000);
-	  	seconds = 3600 * currentTime.Hours + 60 * currentTime.Minutes + currentTime.Seconds;
-	  	memcpy(bufferingFrame.frameData, rxData, CAN_DATA_LENGTH);
-
-	  	bufferingFrame.frameDLC = rxHeader.DLC;
-	  	bufferingFrame.frameIDE = rxHeader.IDE;
-	  	bufferingFrame.frameRTR = rxHeader.RTR;
-	  	bufferingFrame.frameStdID = rxHeader.StdId;
-
-	  	writeFrameToSDCard(bufferingFrame);
-	  	nRF24_SendData(&bufferingFrame, sizeof(Frame)); //test ringBuffera
-
-	  	interruptFlag = false;
- }
-
- /* Potrzebne do poprawnego użycia formatu Kvasera w funkcji writeFrameToSDCard */
- uint8_t numOfDigits(uint32_t number)
- {
- 	uint8_t numberOfDigits = 0;
- 	while (number > 0)
- 	{
- 		numberOfDigits++;
- 		number /= 10;
- 	}
- 	return numberOfDigits;
- }
-
- /* Szybka konwersja dec -> hex */
- static inline char hex_nibble(uint8_t bin)
- {
- 	return "0123456789ABCDEF"[bin];
- }
-
- /* Zapisywanie danych na kartę microSD w formacie Kvasera */
- void writeFrameToSDCard(Frame frame)
- {
-
-
-	   char bufferSD[100];
-	   if (counterSD % 10 == 0)
-	   	{
-		   fresult = f_open(&fil, filename, FA_OPEN_ALWAYS | FA_WRITE);
-	   	}
-	    fresult = f_lseek(&fil,  f_size(&fil)); // do nadpisywania pliku, przesuwa wskaźnik na koniec
-	   	uint8_t length = 0;
-	   	bufferSD[length++] = ' ';
-	   	bufferSD[length++] = '1';
-	   	bufferSD[length++] = ' ';
-	   	bufferSD[length++] = ' ';
-	   	bufferSD[length++] = ' ';
-	   	bufferSD[length++] = ' ';
-	   	for (int i = 28; i >= 0; i -= 4)
-	   	{
-	   		bufferSD[length++] = hex_nibble(frame.frameStdID >> i & 0xF);
-	   	}
-
-	   	for (int i = 0; i < 9; i++)
-	   	{
-	   		bufferSD[length++] = ' ';
-	   	}
-	   	bufferSD[length++] = hex_nibble(frame.frameDLC & 0xF);
-	   	bufferSD[length++] = ' ';
-	   	bufferSD[length++] = ' ';
-
-	   	for (uint8_t i = 0; i < frame.frameDLC; i++)
-	   	{
-	   		bufferSD[length++] = hex_nibble(frame.frameData[i] >> 4 & 0xF);
-	   		bufferSD[length++] = hex_nibble(frame.frameData[i] & 0xF);
-	   		bufferSD[length++] = ' ';
-	   		bufferSD[length++] = ' ';
-	   	}
-	   	for (int i = 0; i < CAN_DATA_LENGTH - frame.frameDLC + 1; i++)
-	   	{
-	   		bufferSD[length++] = ' ';
-	   		bufferSD[length++] = ' ';
-	   		bufferSD[length++] = ' ';
-	   		bufferSD[length++] = ' ';
-	   	}
-
-	   	uint8_t numOfSecondsDigits = numOfDigits(seconds);
-	   	for (int i = 0; i < numOfSecondsDigits; i++)
-	   	{
-	   		uint32_t divider = pow(10, numOfSecondsDigits - 1 - i);
-	   		uint8_t numberToWriteInBuffer = seconds / divider;
-	   		seconds -= numberToWriteInBuffer * divider;
-	   		bufferSD[length++] = numberToWriteInBuffer + ASCII_ZERO_SIGN_CODE; // 48 to stała ASCII między początkiem tablicy ASCII a cyfrą 0
-	   	}
-	   	bufferSD[length++] = '.';
-	   	const uint8_t NUM_OF_MILISECONDS_DIGITS = 6;
-	   	for (int i = 0; i < NUM_OF_MILISECONDS_DIGITS; i++)
-	   	{
-	   		uint32_t divider = pow(10, NUM_OF_MILISECONDS_DIGITS - 1 - i);
-	   		uint8_t numberToWriteInBuffer = miliseconds / divider;
-	   		miliseconds -= numberToWriteInBuffer * divider;
-	   		bufferSD[length++] = numberToWriteInBuffer + ASCII_ZERO_SIGN_CODE; // 48 to stała ASCII między początkiem tablicy ASCII a cyfrą 0
-	   	}
-	   	bufferSD[length++] = ' ';
-	   	bufferSD[length++] = 'R';
-	   	bufferSD[length++] = '\n';
-	   	bufferSD[length++] = '\0';
-	   	fresult = f_write(&fil, bufferSD, bufsize(bufferSD), &bw);
-
-	   	counterSD++;
-	   	if (counterSD % 10 == 0)
-	   	{
-	   		f_close(&fil);
-	   		counterSD = 0;
-	   	}
-
- }
 /* USER CODE END 0 */
 
 /**
@@ -275,25 +149,25 @@ int main(void)
   MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
 
-  /* Inicjalizacja CAN  */
+  /* CAN init */
   HAL_CAN_Start(&hcan1);
   HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
 
-  /* Inicjalizacja modułu radiowego */
+  /* Radio module init */
   nRF24_Init(&hspi3);
-  nRF24_SetRXAddress(0, "Nad");
-  nRF24_SetTXAddress("Odb");
+  nRF24_SetRXAddress(0, rxAddress);
+  nRF24_SetTXAddress(txAddress);
   nRF24_TX_Mode();
 
-  /* Montaż karty microSD */
-   fresult = f_mount(&fs, "/", 1);
+  /* SD card mount */
+   fresult = f_mount(&fs, "/", SD_CARD_MOUNT_IMMEDIATELY);
 
-  /* Nazwanie pliku na karcie microSD */
+  /* Handle naming of file on SD card */
    HAL_RTC_GetTime(&hrtc, &currentTime, RTC_FORMAT_BIN);
    HAL_RTC_GetDate(&hrtc, &currentDate, RTC_FORMAT_BIN);
-   miliseconds = ((currentTime.SecondFraction - currentTime.SubSeconds)/((float)currentTime.SecondFraction+1) * 1000000);
-   sprintf(filename, "LOG_%02d%02d%d_%02d%02d_%02d_%d.txt", currentDate.Date,
-		   currentDate.Month, currentDate.Year + 2000, currentTime.Hours,
+   miliseconds = ((currentTime.SecondFraction - currentTime.SubSeconds)/((float)currentTime.SecondFraction+1) * TIME_MILISECONDS_IN_SECOND);
+   sprintf(filename, "LOG_%02d%02d%d_%02d%02d_%02d_%lu.txt", currentDate.Date,
+		   currentDate.Month, currentDate.Year + SECOND_MILLENIUM, currentTime.Hours,
 		   currentTime.Minutes, currentTime.Seconds, miliseconds);
   /* USER CODE END 2 */
 
@@ -302,15 +176,14 @@ int main(void)
   while (1)
   {
 
-	  /* Obsługa przerwania */
+	  /* Radio module interrupt checker */
 	  nRF24_Event();
 
-	  /* Wysyłka pakietu */
+	  /* Handling of received packet */
 	  if(interruptFlag)
 	  {
 		 readDataToBuffer();
 	  }
-
 
     /* USER CODE END WHILE */
 
@@ -380,23 +253,48 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
-/* Przerwanie od modułu radiowego */
+/* Radio module interrupt callback */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
  {
 	if(GPIO_Pin == NRF24_IRQ_Pin)
-			{
-				nRF24_IRQ_Handler();
-			}
+	{
+		nRF24_IRQ_Handler();
+	}
 }
 
-
-
-/* Przerwanie - przyszła ramka CAN */
+/* CAN message received callback */
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef* hcan)
 {
 	HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &rxHeader, rxData);
 	interruptFlag = true;
 }
+
+/* Function reads data, pack it into buffer and save data to SD card */
+static void readDataToBuffer(void)
+{
+	HAL_RTC_GetTime(&hrtc, &currentTime, RTC_FORMAT_BIN);
+	HAL_RTC_GetDate(&hrtc, &currentDate, RTC_FORMAT_BIN);
+	bufferingFrame.year = currentDate.Year;
+	bufferingFrame.month = currentDate.Month;
+	bufferingFrame.day = currentDate.Date;
+	bufferingFrame.hours = currentTime.Hours;
+	bufferingFrame.minutes = currentTime.Minutes;
+	bufferingFrame.seconds = currentTime.Seconds;
+	miliseconds = ((currentTime.SecondFraction - currentTime.SubSeconds)/((float)currentTime.SecondFraction+1) * TIME_MILISECONDS_IN_SECOND);
+	seconds = TIME_SECONDS_IN_HOUR * currentTime.Hours + TIME_MINUTES_IN_HOUR * currentTime.Minutes + currentTime.Seconds;
+	memcpy(bufferingFrame.frameData, rxData, CAN_DATA_LENGTH);
+
+	bufferingFrame.frameDLC = rxHeader.DLC;
+	bufferingFrame.frameIDE = rxHeader.IDE;
+	bufferingFrame.frameRTR = rxHeader.RTR;
+	bufferingFrame.frameStdID = rxHeader.StdId;
+
+	writeFrameToSDCard(&bufferingFrame);
+	nRF24_SendData((uint8_t*)&bufferingFrame, sizeof(Frame));
+
+	interruptFlag = false;
+}
+
 /* USER CODE END 4 */
 
 /**

@@ -77,7 +77,7 @@ uint8_t FATFS_LinkDriver(const Diskio_drvTypeDef *drv, char *path)
   * @param  lun : not used
   * @retval Returns 0 in case of success, otherwise 1.
   */
-uint8_t FATFS_UnLinkDriverEx(char *path, uint8_t lun)
+uint8_t FATFS_UnLinkDriverEx(char *path)
 {
   uint8_t DiskNum = 0;
   uint8_t ret = 1;
@@ -105,7 +105,7 @@ uint8_t FATFS_UnLinkDriverEx(char *path, uint8_t lun)
   */
 uint8_t FATFS_UnLinkDriver(char *path)
 {
-  return FATFS_UnLinkDriverEx(path, 0);
+  return FATFS_UnLinkDriverEx(path);
 }
 
 /**

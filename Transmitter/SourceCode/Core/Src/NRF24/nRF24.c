@@ -338,7 +338,7 @@ void nRF24_SetAddressWidth(uint8_t size)
 	nRF24_WriteRegister(NRF24_SETUP_AW, ((size-2) & 0x03));
 }
 
-void nRF24_SetRXAddress(uint8_t pipe, uint8_t* address)
+void nRF24_SetRXAddress(uint8_t pipe, const uint8_t* address)
 {
 	// pipe 0 and pipe 1 are fully 40-bits storaged
 	// pipe 2-5 is storaged only with last byte. Rest are as same as pipe 1
@@ -355,7 +355,7 @@ void nRF24_SetRXAddress(uint8_t pipe, uint8_t* address)
 		nRF24_WriteRegister(NRF24_RX_ADDR_P0 + pipe, address[NRF24_ADDR_SIZE-1]);
 }
 
-void nRF24_SetTXAddress(uint8_t* address)
+void nRF24_SetTXAddress(const uint8_t* address)
 {
 	// TX address is storaged similar to RX pipe 0 - LSByte first
 	uint8_t i;
@@ -431,7 +431,7 @@ void nRF24_EnableMaxRetransmitIRQ(uint8_t onoff)
 	nRF24_WriteConfig(config);
 }
 
-void nRF24_WriteTXPayload(uint8_t * data, uint8_t size)
+void nRF24_WriteTXPayload(uint8_t * data, __attribute__((unused))uint8_t size)
 {
 #if (NRF24_DYNAMIC_PAYLOAD == 1)
 	nRF24_WriteRegisters(NRF24_CMD_W_TX_PAYLOAD, data, size);
@@ -453,7 +453,7 @@ void nRF24_WaitTX()
 	}while(!((status & (1<<NRF24_MAX_RT)) || (status & (1<<NRF24_TX_DS))));
 }
 
-void nRF24_ReadRXPaylaod(uint8_t *data, uint8_t *size)
+void nRF24_ReadRXPaylaod(uint8_t *data, __attribute__((unused))uint8_t *size)
 {
 #if (NRF24_DYNAMIC_PAYLOAD == 1)
 	*size = nRF24_GetDynamicPayloadSize();

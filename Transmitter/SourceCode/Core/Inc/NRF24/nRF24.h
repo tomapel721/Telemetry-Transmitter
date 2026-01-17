@@ -81,8 +81,8 @@ void nRF24_SetRFChannel(uint8_t channel);
 void nRF24_SetPayloadSize(uint8_t pipe, uint8_t size);
 void nRF24_EnablePipe(uint8_t pipe, uint8_t onoff);
 void nRF24_AutoACK(uint8_t pipe, uint8_t onoff);
-void nRF24_SetRXAddress(uint8_t pipe, uint8_t* address); // Remember to define RX address before TX
-void nRF24_SetTXAddress(uint8_t* address);
+void nRF24_SetRXAddress(uint8_t pipe, const uint8_t* address); // Remember to define RX address before TX
+void nRF24_SetTXAddress(const uint8_t* address);
 void nRF24_SetAddressWidth(uint8_t size);
 void nRF24_SetPayloadSize(uint8_t pipe, uint8_t size);
 
