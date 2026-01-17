@@ -4,7 +4,7 @@ The transmitter part of telemetry system which was implemented inside a Formula 
 ## :computer: How it works - technologies
 PCB Design: **KiCad**
 
-Project source code: **C with usage of HAL libraries**
+Project source code: **C (C18) with usage of HAL libraries**
 Board used: **STM32L432KC**
 
 ## :file_folder: Repository structure
